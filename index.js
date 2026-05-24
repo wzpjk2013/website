@@ -2,11 +2,21 @@
 const express=require('express');
 const mysql=require('mysql2');
 const session=require('express-session');
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
 const app=express();
 
-//解析表单
-app.use(express.urlencoded({extended:false}));
-app.use(express.json());
+// 创建日志目录
+const logDirectory = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDirectory)) {
+    fs.mkdirSync(logDirectory);
+}
+
+// 配置访问日志
+const accessLogStream = fs.createWriteStream(path.join(logDirectory, 'access.log'), { flags: 'a' });
+app.use(morgan('combined', { stream: accessLogStream }));
+app.use(morgan('dev'));
 
 //数据库配置
 const dbCondig={
