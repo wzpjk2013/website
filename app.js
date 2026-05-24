@@ -231,6 +231,6 @@ app.get('/logout', (req, res) => {
 });
 
 //启动服务器
-app.listen(3005, () => {
-    console.log('服务启动在 http://localhost:3005');
+app.listen(3006, () => {
+    console.log('服务启动在 http://localhost:3006');
 });
