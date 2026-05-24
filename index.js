@@ -111,6 +111,6 @@ app.get('/logout',(req,res)=>{
 
 //启动npm install express mysql2 express-session
 
-app.listen(3000,()=>{
-    console.log('服务启动在3000端口');
+app.listen(3005,()=>{
+    console.log('服务启动在3005端口');
 });
