@@ -7,6 +7,10 @@ const fs = require('fs');
 const path = require('path');
 const app=express();
 
+//解析表单
+app.use(express.urlencoded({extended:false}));
+app.use(express.json());
+
 // 创建日志目录
 const logDirectory = path.join(__dirname, 'logs');
 if (!fs.existsSync(logDirectory)) {
@@ -17,6 +21,7 @@ if (!fs.existsSync(logDirectory)) {
 const accessLogStream = fs.createWriteStream(path.join(logDirectory, 'access.log'), { flags: 'a' });
 app.use(morgan('combined', { stream: accessLogStream }));
 app.use(morgan('dev'));
+
 
 //数据库配置
 const dbCondig={
@@ -51,6 +56,38 @@ app.use((req,res,next)=>{
     next();
 });
 
+// 添加日志记录功能
+function logAction(action, user, details = '') {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${action} - User: ${user || 'Anonymous'} - ${details}\n`;
+    fs.appendFileSync(path.join(logDirectory, 'app.log'), logEntry);
+}
+
+// 日志页面
+app.get('/log', (req, res) => {
+    const logFile = path.join(logDirectory, 'app.log');
+    let logs = [];
+    
+    if (fs.existsSync(logFile)) {
+        const logContent = fs.readFileSync(logFile, 'utf8');
+        logs = logContent.split('\n').filter(line => line.trim() !== '').reverse(); // 最新的在前
+    }
+    
+    let html = '<h1>应用日志</h1><div style="font-family: monospace; white-space: pre-wrap;">';
+    
+    if (logs.length > 0) {
+        logs.slice(0, 100).forEach(log => { // 只显示最近100条
+            html += `<p>${log}</p>`;
+        });
+    } else {
+        html += '<p>暂无日志记录</p>';
+    }
+    
+    html += '</div><br><a href="/">返回首页</a>';
+    
+    res.send(html);
+});
+
 //首页
 app.get('/',(req,res)=>{
     if(req.session.user){
@@ -69,20 +106,24 @@ app.get('/login',(req,res)=>{
 app.post('/login',(req,res)=>{
     const {username,password}=req.body;
     connection.query('SELECT * FROM users WHERE username=?',[username],(err,results)=>{
-        if(err){
+        if(err) {
+            logAction('LOGIN_FAILED', null, `Database error: ${err.message}`);
             return res.send('数据库错误');
         }
         if(results.length==0){
+            logAction('LOGIN_FAILED', null, `User not found: ${username}`);
             return res.send('用户不存在');
         }
         const user=results[0];
         if(password!=user.password){
+            logAction('LOGIN_FAILED', null, `Invalid password attempt for: ${username}`);
             return res.send('密码错误');
         }
         req.session.user={
             id:user.id,
             username:user.username,
         };
+        logAction('LOGIN_SUCCESS', username, `User logged in from IP: ${req.ip}`);
         res.send('登录成功');
     });
 });
@@ -96,16 +137,20 @@ app.get('/register',(req,res)=>{
 app.post('/register',(req,res)=>{
     const {username,password}=req.body;
     connection.query('SELECT * FROM users WHERE username=?',[username],(err,results)=>{
-        if(err){
+        if(err) {
+            logAction('REGISTER_FAILED', null, `Database error: ${err.message}`);
             return res.send('数据库错误');
         }
         if(results.length>0){
+            logAction('REGISTER_FAILED', null, `Registration attempt with existing username: ${username}`);
             return res.send('用户名已存在');
         }
         connection.query('INSERT INTO users (username,password) VALUES(?,?)',[username,password],(err)=>{
-            if(err){
+            if(err) {
+                logAction('REGISTER_FAILED', null, `Database error: ${err.message}`);
                 return res.send('数据库错误');
             }
+            logAction('REGISTER_SUCCESS', username, `New user registered from IP: ${req.ip}`);
             res.send('注册成功');
         });
     });
@@ -113,7 +158,13 @@ app.post('/register',(req,res)=>{
 
 //登出
 app.get('/logout',(req,res)=>{
+    const username = req.session.user ? req.session.user.username : 'Anonymous';
     req.session.destroy((err)=>{
+        if(err) {
+            logAction('LOGOUT_FAILED', username, `Error destroying session: ${err.message}`);
+        } else {
+            logAction('LOGOUT_SUCCESS', username, `User logged out from IP: ${req.ip}`);
+        }
         res.clearCookie('connect.sid');
         res.redirect('/');
     });
