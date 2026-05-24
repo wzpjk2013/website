@@ -11,9 +11,9 @@ app.use(express.json());
 //数据库配置
 const dbCondig={
     host:'localhost',
-    user:'root',
+    user:'smew',
     password:'123456',
-    database:'smew'
+    database:'DAJ76NwpSBEHmCBh'
 };
 
 //连结数据库
